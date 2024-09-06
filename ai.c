@@ -43,6 +43,23 @@ struct game {
 
 //general functions
 
+void displayProgressBar(int progress, int total) {
+    int barWidth = 20;
+    float ratio = (float)progress / (float)total;
+    int filledLength = (int)(barWidth * ratio);
+    int unfilledLength = barWidth - filledLength;
+
+    printf("\r[");
+    for (int i = 0; i < filledLength; i++) {
+        printf("#");
+    }
+    for (int i = 0; i < unfilledLength; i++) {
+        printf(" ");
+    }
+    printf("] %.2f%%", ratio * 100);
+    fflush(stdout);
+}
+
 //randomizes array with double values between -1 and 1
 void randArray(double array[], int len) {
     for (int i = 0; i < len; i++) {
@@ -193,10 +210,11 @@ int main(int argc, char const *argv[]) {
 
     // while(true) { //When to stop?
     for (int round = 0; round < rounds; round++) {
+        if (!verbose) displayProgressBar(round, rounds);
         for (int i = 0; i < games; i++) for (int j = 0; j < boardHeight; j++) for (int k = 0; k < boardWidth; k++) gameList[i].board[j][k] = 0;
-        printf("Round %i start\n", round);
+        if (verbose) printf("Round %i start\n", round);
         for (int i = 0; i < games; i++) {
-            printf("Game %i start\n", i);
+            if (verbose) printf("Game %i start\n", i);
             while(true) {
                 if (verbose) printf("game round start\n");
                 boardToInput(gameList[i].board, tempInput);
@@ -250,7 +268,7 @@ int main(int argc, char const *argv[]) {
                 }
             }
         }
-        printf("Start Sorting\n");
+        if (verbose) printf("Start Sorting\n");
         for (int i = 0; i < games; i++) {
             if (i < games/2) {
                 gameList[i].p1 = gameList[i*2].winner;
@@ -262,10 +280,10 @@ int main(int argc, char const *argv[]) {
                 agentList[gameList[i].p2].weights[randInt(inputs*nodes+nodes*outputs)] = randDouble;
             }
         }
-        printf("Game Complete\n");
+        if (verbose) printf("Game Complete\n");
     }
 
-    printf("Finished Traning\n");
+    printf("\nFinished Traning\n");
     FILE* fptr = fopen("weights.txt", "w");
     for (int i = 0; i < (inputs*nodes+nodes*outputs); i++) {
         fprintf(fptr, "%f,", agentList[gameList[0].p1].weights[i]);

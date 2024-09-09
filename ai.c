@@ -274,9 +274,11 @@ int main(int argc, char const *argv[]) {
                 gameList[i].p1 = gameList[i*2].winner;
                 gameList[i].p2 = gameList[i*2+1].winner;
             } else {
-                gameList[i].p1 = gameList[i*2-games].winner;
+                gameList[i].p1 = gameList[i*2-games].loser;
+                for (int j = 0; j < (inputs*nodes+nodes*outputs); j++) agentList[gameList[i].p1].weights[j] = agentList[gameList[i*2-games].winner].weights[j]; //copy winner's weights to loser (child)
                 agentList[gameList[i].p1].weights[randInt(inputs*nodes+nodes*outputs)] = randDouble; //randomize winner's children
-                gameList[i].p2 = gameList[i*2+1-games].winner;
+                gameList[i].p2 = gameList[i*2+1-games].loser;
+                for (int j = 0; j < (inputs*nodes+nodes*outputs); j++) agentList[gameList[i].p2].weights[j] = agentList[gameList[i*2-games].winner].weights[j];
                 agentList[gameList[i].p2].weights[randInt(inputs*nodes+nodes*outputs)] = randDouble;
             }
         }

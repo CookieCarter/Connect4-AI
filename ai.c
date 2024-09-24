@@ -172,7 +172,7 @@ bool checkWin(int board[boardHeight][boardWidth], int player) {
 }
 
 void help(void) {
-    printf("ai.exe [rounds] [-v]\n  -v  Displays debug information\n");
+    printf("ai.exe [rounds] [starting percent] [stop percent] [-v/-s]\n  starting percent  The percentage that the randomness starts at (0-100)\n  stop percent  The percent through the rounds that the randomness reaches 0 (0-100)\n  -v  Displays debug information\n  -s  Does not print anything to screen\n");
     exit(EINVAL);
 }
 
@@ -182,13 +182,18 @@ int main(int argc, char const *argv[]) {
     double tempInput[inputs]; //inputs for evaluating network
     int tempVar;
 
-    unsigned int rounds;
-    bool verbose = false;
+    unsigned int rounds, startPercent, stopPercent;
+    bool verbose = false, silent = false;
+    double percent;
 
-    if (argc > 1) {if (!(rounds = atoi(argv[1]))) help();} else {help();}
-    if (argc > 2) {
-        if (argv[2][0]=='-'&&argv[2][1]=='v') {
+    if (argc > 3) {if (!(rounds = atoi(argv[1]))) help();} else {help();}
+    if ((startPercent = atoi(argv[2]))<0||startPercent>100) help();
+    if ((stopPercent = atoi(argv[3]))<0||stopPercent>100) help();
+    if (argc > 4) {
+        if (argv[4][0]=='-'&&argv[4][1]=='v') {
             verbose = true;
+        } else if (argv[4][0]=='-'&&argv[4][1]=='s') {
+            silent = true;
         } else {
             help();
         }
@@ -210,18 +215,26 @@ int main(int argc, char const *argv[]) {
 
     // while(true) { //When to stop?
     for (int round = 0; round < rounds; round++) {
-        if (!verbose) displayProgressBar(round, rounds);
+        if (!verbose&&!silent) displayProgressBar(round, rounds);
         for (int i = 0; i < games; i++) for (int j = 0; j < boardHeight; j++) for (int k = 0; k < boardWidth; k++) gameList[i].board[j][k] = 0;
         if (verbose) printf("Round %i start\n", round);
+        percent = ((-(double)startPercent/((double)rounds*((double)stopPercent/(double)100)))*(double)round+startPercent);
         for (int i = 0; i < games; i++) {
             if (verbose) printf("Game %i start\n", i);
             while(true) {
                 if (verbose) printf("game round start\n");
-                boardToInput(gameList[i].board, tempInput);
-                evaluateNetwork(tempInput, agentList[gameList[i].p1].weights, tempOutput);
-                if (verbose) for (int j = 0; j < outputs; j++) {printf("%f\n",tempOutput[j]);}
-                tempVar = highestValue(tempOutput, boardWidth, gameList[i].board);
-                if (tempVar==-1&&verbose) {printf("Columns Full Error\n");goto fullColumn;}
+                if (randInt(101) >= percent) {
+                    boardToInput(gameList[i].board, tempInput);
+                    evaluateNetwork(tempInput, agentList[gameList[i].p1].weights, tempOutput);
+                    if (verbose) for (int j = 0; j < outputs; j++) {printf("%f\n",tempOutput[j]);}
+                    tempVar = highestValue(tempOutput, boardWidth, gameList[i].board);
+                } else {
+                    tempVar = randInt(boardWidth);
+                    while (xToY(gameList[i].board, tempVar) == -1) {
+                        tempVar = ++tempVar%boardWidth;
+                    }
+                }
+                if (tempVar==-1) {if (verbose)printf("Columns Full Error\n");goto fullColumn;}
                 if (verbose) printf("%i\n",tempVar);
                 if (xToY(gameList[i].board, tempVar) == -1) {
                     printf("Full Column Error");
@@ -234,10 +247,17 @@ int main(int argc, char const *argv[]) {
                     break;
                 }
 
-                boardToInput(gameList[i].board, tempInput);
-                evaluateNetwork(tempInput, agentList[gameList[i].p2].weights, tempOutput);
-                if (verbose) for (int j = 0; j < outputs; j++) {printf("%f\n",tempOutput[j]);}
-                tempVar = highestValue(tempOutput, boardWidth, gameList[i].board);
+                if (randInt(101) >= percent) {
+                    boardToInput(gameList[i].board, tempInput);
+                    evaluateNetwork(tempInput, agentList[gameList[i].p2].weights, tempOutput);
+                    if (verbose) for (int j = 0; j < outputs; j++) {printf("%f\n",tempOutput[j]);}
+                    tempVar = highestValue(tempOutput, boardWidth, gameList[i].board);
+                } else {
+                    tempVar = randInt(boardWidth);
+                    while (xToY(gameList[i].board, tempVar) == -1) {
+                        tempVar = ++tempVar%boardWidth;
+                    }
+                }
                 if (tempVar==-1&&verbose) {printf("Columns Full Error\n");goto fullColumn;}
                 if (verbose) printf("%i\n",tempVar);
                 if (xToY(gameList[i].board, tempVar) == -1) {

@@ -73,11 +73,11 @@ int highestValue(double array[], int len, int board[boardHeight][boardWidth]) {
     int index = -1;
     for (int i = 0; i < len; i++) {
         //set value to highest unless board is full in that column
-        highest = (array[i]>highest&&!board[0][i])?array[i],index=i:highest;
-        // if (array[i] > highest) {
-        //     highest = array[i];
-        //     index = i;
-        // }
+        // highest = (array[i]>highest&&!board[0][i])?array[i],index=i:highest;
+        if (array[i] > highest && !board[0][i]) {
+            highest = array[i];
+            index = i;
+        }
     }
     return index;
 }

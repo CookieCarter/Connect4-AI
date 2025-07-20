@@ -2,34 +2,38 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
-#include <windows.h>
+#include <string.h>
+#include <errno.h>
+#include <math.h>
+
 //float in range -1 to 1
 #define randDouble ((double)rand()/RAND_MAX*2.0-1.0)
 //int from 0 to x-1
 #define randInt(x) ((int)rand()%(x))
 #define listSize(l) (sizeof(l)/sizeof(l[0]))
-#define swap(a,b) a^=b; b^=a; a^=b
 
 //game values
 
-#define boardHeight 6
-#define boardWidth 7
-#define games (agents/2)
+const int boardHeight = 6;
+const int boardWidth = 7;
+const int games = agents/2;
 
 //network values
 
-#define winners 10
-#define children 1
-#define agents (winners*children+winners) //should be even
-#define inputs (boardHeight*boardWidth) //board
-#define nodes 17 //sqrt(input layer nodes * output layer nodes) = 17.1464281995...
-#define outputs boardWidth
+const int winners = 50; //10
+const int children = 9; //1
+const int agents = winners*children+winners; //should be even
+const int inputs = boardHeight*boardWidth; //board
+const int nodes = 32; //sqrt(input layer nodes * output layer nodes) = 17.1464281995...
+const int outputs = boardWidth;
+const int totalWeights = inputs*nodes+nodes*outputs;
+const int mutations = totalWeights*0.02; //0.02 mutation rate (2% of weights)
 
 
 //structs
 
 struct agent {
-    double weights[inputs*nodes+nodes*outputs];
+    double weights[totalWeights];
 };
 
 struct game {
@@ -69,7 +73,7 @@ void randArray(double array[], int len) {
 
 //return the index of the highest value in the array
 int highestValue(double array[], int len, int board[boardHeight][boardWidth]) {
-    double highest = -999999999999;
+    double highest = -INFINITY;
     int index = -1;
     for (int i = 0; i < len; i++) {
         //set value to highest unless board is full in that column
@@ -88,8 +92,8 @@ int highestValue(double array[], int len, int board[boardHeight][boardWidth]) {
 //evaluate the network and return the index of the highest output
 void evaluateNetwork(double input[], double weights[], double output[]) {
     double hidden[nodes];
-    RtlZeroMemory(hidden, nodes);
-    RtlZeroMemory(output, outputs);
+    memset(hidden, 0, nodes);
+    memset(output, 0, outputs);
 
     for (int i = 0; i < nodes; i++) {
         for (int j = 0; j < inputs; j++) {
@@ -208,7 +212,7 @@ int main(int argc, char const *argv[]) {
     //setup games
     struct game gameList[games];
     for (int i = 0; i < games; i++) {
-        for (int j = 0; j < boardHeight; j++) RtlZeroMemory(gameList[i].board[j], boardWidth);
+        for (int j = 0; j < boardHeight; j++) memset(gameList[i].board[j], 0, boardWidth);
         gameList[i].p1 = i*2;
         gameList[i].p2 = i*2+1;
     }
@@ -289,17 +293,27 @@ int main(int argc, char const *argv[]) {
             }
         }
         if (verbose) printf("Start Sorting\n");
+        
+        // FIX THIS SECTION!!!!!!
+
         for (int i = 0; i < games; i++) {
-            if (i < games/2) {
-                gameList[i].p1 = gameList[i*2].winner;
-                gameList[i].p2 = gameList[i*2+1].winner;
-            } else {
-                gameList[i].p1 = gameList[i*2-games].loser;
-                for (int j = 0; j < (inputs*nodes+nodes*outputs); j++) agentList[gameList[i].p1].weights[j] = agentList[gameList[i*2-games].winner].weights[j]; //copy winner's weights to loser (child)
-                agentList[gameList[i].p1].weights[randInt(inputs*nodes+nodes*outputs)] = randDouble; //randomize winner's children
-                gameList[i].p2 = gameList[i*2+1-games].loser;
-                for (int j = 0; j < (inputs*nodes+nodes*outputs); j++) agentList[gameList[i].p2].weights[j] = agentList[gameList[i*2-games].winner].weights[j];
-                agentList[gameList[i].p2].weights[randInt(inputs*nodes+nodes*outputs)] = randDouble;
+            if (i < winners) { //First section of the ranking consists of the winners (discarding any beyond the #)
+                if (i%2) {
+                    gameList[i].p1 = gameList[i].winner;
+                } else {
+                    gameList[i].p2 = gameList[i].winner; 
+                }
+            } else { //Second section is made of the winners' children
+                if (i%2) {
+                    gameList[i].p1 = gameList[i-winners].loser;
+                    memcpy(agentList[gameList[i].p1].weights, agentList[gameList[(i-winners)/children].winner].weights, totalWeights); //copy winner's weights to loser (turn into child)
+                    for (int j = 0; j < totalWeights; j++) agentList[gameList[i].p1].weights[randInt(totalWeights)] = randDouble; //randomize some of the weights of winner's children
+                } else {
+                    gameList[i].p2 = gameList[i-winners].loser;
+                    memcpy(agentList[gameList[i].p2].weights, agentList[gameList[(i-winners)/children].winner].weights, totalWeights); //copy winner's weights to loser (turn into child)
+                    for (int j = 0; j < totalWeights; j++) agentList[gameList[i].p2].weights[randInt(totalWeights)] = randDouble; //randomize some of the weights of winner's children
+                }
+                
             }
         }
         if (verbose) printf("Game Complete\n");
@@ -307,7 +321,7 @@ int main(int argc, char const *argv[]) {
 
     printf("\nFinished Traning\n");
     FILE* fptr = fopen("weights.txt", "w");
-    for (int i = 0; i < (inputs*nodes+nodes*outputs); i++) {
+    for (int i = 0; i < (totalWeights); i++) {
         fprintf(fptr, "%f,", agentList[gameList[0].p1].weights[i]);
     }
     fclose(fptr);

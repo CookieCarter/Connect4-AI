@@ -10,24 +10,23 @@
 #define randDouble ((double)rand()/RAND_MAX*2.0-1.0)
 //int from 0 to x-1
 #define randInt(x) ((int)rand()%(x))
-#define listSize(l) (sizeof(l)/sizeof(l[0]))
 
 //game values
 
-const int boardHeight = 6;
-const int boardWidth = 7;
-const int games = agents/2;
+#define boardHeight 6
+#define boardWidth 7
+#define games (agents/2)
 
 //network values
 
-const int winners = 50; //10
-const int children = 9; //1
-const int agents = winners*children+winners; //should be even
-const int inputs = boardHeight*boardWidth; //board
-const int nodes = 32; //sqrt(input layer nodes * output layer nodes) = 17.1464281995...
-const int outputs = boardWidth;
-const int totalWeights = inputs*nodes+nodes*outputs;
-const int mutations = totalWeights*0.02; //0.02 mutation rate (2% of weights)
+#define winners 50 //10
+#define children 9 //1
+#define agents (winners*children+winners) //should be even
+#define inputs (boardHeight*boardWidth) //board
+#define nodes 32 //sqrt(input layer nodes * output layer nodes) = 17.1464281995...
+#define outputs boardWidth
+#define totalWeights (inputs*nodes+nodes*outputs)
+#define mutations ((int)(totalWeights*0.02)) //0.02 mutation rate (2% of weights)
 
 
 //structs
@@ -71,6 +70,19 @@ void randArray(double array[], int len) {
     }
 }
 
+void scaledRandArray(double array[], int len) {
+    int numOfInputs;
+    for (int i = 0; i < len; i++) {
+        if (i < inputs * nodes) { // input to hidden layer
+            numOfInputs = inputs;
+        } else { // hidden to output layer
+            numOfInputs = nodes;
+        }
+        // scale the random number by the sqrt of the number of inputs
+        array[i] = randDouble * sqrt(1.0 / numOfInputs);
+    }
+}
+
 //return the index of the highest value in the array
 int highestValue(double array[], int len, int board[boardHeight][boardWidth]) {
     double highest = -INFINITY;
@@ -89,37 +101,42 @@ int highestValue(double array[], int len, int board[boardHeight][boardWidth]) {
 
 //network functions
 
-//evaluate the network and return the index of the highest output
+//evaluate the network
 void evaluateNetwork(double input[], double weights[], double output[]) {
     double hidden[nodes];
-    memset(hidden, 0, nodes);
-    memset(output, 0, outputs);
 
+    // input to hidden layer
     for (int i = 0; i < nodes; i++) {
+        hidden[i] = 0;
         for (int j = 0; j < inputs; j++) {
-            hidden[i]+= input[j]*weights[i*inputs+j];
+            hidden[i] += input[j] * weights[i * inputs + j];
         }
-        hidden[i] = hidden[i]>0?hidden[i]:0.01*hidden[i]; //leaky relu
+        hidden[i] = tanh(hidden[i]);
     }
 
+    // hidden to output layer
     for (int i = 0; i < outputs; i++) {
+        output[i] = 0;
         for (int j = 0; j < nodes; j++) {
-            output[i]+= hidden[j]*weights[i*nodes+j];
+            output[i] += hidden[j] * weights[inputs * nodes + i * nodes + j];
         }
-        output[i] = output[i]>0?output[i]:0.01*output[i]; //leaky relu
     }
-
-    // return highestValue(output, outputs);
 }
 
 
 //game functions
 
 //turns board into input
-void boardToInput(int board[boardHeight][boardWidth], double input[inputs]) {
+void boardToInput(int board[boardHeight][boardWidth], double input[inputs], int currentPlayer) {
     for (int i = 0; i < boardHeight; i++) {
         for (int j = 0; j < boardWidth; j++) {
-            input[i*boardWidth+j] = board[i][j];
+            if (board[i][j] == currentPlayer) {
+                input[i*boardWidth+j] = 1;
+            } else if (board[i][j] != 0) { // opponent's piece
+                input[i*boardWidth+j] = -1;
+            } else { // empty
+                input[i*boardWidth+j] = 0;
+            }
         }
     }
 }
@@ -204,17 +221,27 @@ int main(int argc, char const *argv[]) {
     }
 
     //setup agents
-    struct agent agentList[agents];
-    for (int i = 0; i < agents; i++) {
-        randArray(agentList[i].weights, listSize(agentList[i].weights));
+    struct agent* agentList = malloc(agents * sizeof(struct agent));
+    if (!agentList) {
+        fprintf(stderr, "Failed to allocate agentList\n");
+        exit(ENOMEM);
     }
+    for (int i = 0; i < agents; i++) {
+        // randArray(agentList[i].weights, totalWeights);
+        scaledRandArray(agentList[i].weights, totalWeights);
+    }
+
+    int* parents = malloc(winners * sizeof(int));
+    struct agent* tempAgentList = malloc(agents * sizeof(struct agent));
 
     //setup games
     struct game gameList[games];
     for (int i = 0; i < games; i++) {
-        for (int j = 0; j < boardHeight; j++) memset(gameList[i].board[j], 0, boardWidth);
+        for (int j = 0; j < boardHeight; j++) memset(gameList[i].board[j], 0, boardWidth * sizeof(int));
         gameList[i].p1 = i*2;
         gameList[i].p2 = i*2+1;
+        gameList[i].winner = -1;
+        gameList[i].loser = -1;
     }
 
     // while(true) { //When to stop?
@@ -228,7 +255,7 @@ int main(int argc, char const *argv[]) {
             while(true) {
                 if (verbose) printf("game round start\n");
                 if (randInt(101) >= percent) {
-                    boardToInput(gameList[i].board, tempInput);
+                    boardToInput(gameList[i].board, tempInput, 1);
                     evaluateNetwork(tempInput, agentList[gameList[i].p1].weights, tempOutput);
                     if (verbose) for (int j = 0; j < outputs; j++) {printf("%f\n",tempOutput[j]);}
                     tempVar = highestValue(tempOutput, boardWidth, gameList[i].board);
@@ -252,7 +279,7 @@ int main(int argc, char const *argv[]) {
                 }
 
                 if (randInt(101) >= percent) {
-                    boardToInput(gameList[i].board, tempInput);
+                    boardToInput(gameList[i].board, tempInput, 2);
                     evaluateNetwork(tempInput, agentList[gameList[i].p2].weights, tempOutput);
                     if (verbose) for (int j = 0; j < outputs; j++) {printf("%f\n",tempOutput[j]);}
                     tempVar = highestValue(tempOutput, boardWidth, gameList[i].board);
@@ -294,33 +321,55 @@ int main(int argc, char const *argv[]) {
         }
         if (verbose) printf("Start Sorting\n");
         
-        // FIX THIS SECTION!!!!!!
+        // get the winners
+        for (int i = 0; i < winners; i++) {
+            parents[i] = gameList[i].winner;
+        }
 
-        for (int i = 0; i < games; i++) {
-            if (i < winners) { //First section of the ranking consists of the winners (discarding any beyond the #)
-                if (i%2) {
-                    gameList[i].p1 = gameList[i].winner;
-                } else {
-                    gameList[i].p2 = gameList[i].winner; 
-                }
-            } else { //Second section is made of the winners' children
-                if (i%2) {
-                    gameList[i].p1 = gameList[i-winners].loser;
-                    memcpy(agentList[gameList[i].p1].weights, agentList[gameList[(i-winners)/children].winner].weights, totalWeights); //copy winner's weights to loser (turn into child)
-                    for (int j = 0; j < totalWeights; j++) agentList[gameList[i].p1].weights[randInt(totalWeights)] = randDouble; //randomize some of the weights of winner's children
-                } else {
-                    gameList[i].p2 = gameList[i-winners].loser;
-                    memcpy(agentList[gameList[i].p2].weights, agentList[gameList[(i-winners)/children].winner].weights, totalWeights); //copy winner's weights to loser (turn into child)
-                    for (int j = 0; j < totalWeights; j++) agentList[gameList[i].p2].weights[randInt(totalWeights)] = randDouble; //randomize some of the weights of winner's children
-                }
+        // copy winners to next generation
+        for (int i = 0; i < winners; i++) {
+            memcpy(tempAgentList[i].weights, agentList[parents[i]].weights, totalWeights * sizeof(double));
+        }
+
+        // winners reproduce
+        for (int i = winners; i < agents; i++) {
+            // pick a random winner to be the parent
+            int parentIndex = parents[randInt(winners)];
+            
+            // copy the parent's weights to the child
+            memcpy(tempAgentList[i].weights, agentList[parentIndex].weights, totalWeights * sizeof(double));
+
+            
+            for (int j = 0; j < mutations; j++) {
+                int mutationIndex = randInt(totalWeights);
                 
+                // tempAgentList[i].weights[mutationIndex] = randDouble;
+                
+                tempAgentList[i].weights[mutationIndex] += randDouble * 0.1;
             }
         }
+
+        // copy next generation to current one.
+        memcpy(agentList, tempAgentList, agents * sizeof(struct agent));
+
+
+        // assign agents to games
+        for (int i = 0; i < games; i++) {
+            gameList[i].p1 = i*2;
+            gameList[i].p2 = i*2+1;
+            gameList[i].winner = -1;
+            gameList[i].loser = -1;
+        }
+
         if (verbose) printf("Game Complete\n");
     }
 
     printf("\nFinished Traning\n");
     FILE* fptr = fopen("weights.txt", "w");
+    if (fptr == NULL) {
+        printf("Error opening file");
+        exit(ENOENT);
+    }
     for (int i = 0; i < (totalWeights); i++) {
         fprintf(fptr, "%f,", agentList[gameList[0].p1].weights[i]);
     }

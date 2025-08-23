@@ -188,12 +188,15 @@ bool checkWin(int board[boardHeight][boardWidth], int player) {
                     return true;
                 }
                 if (j<boardWidth-3) {
-                    //diagonals
-                    if (board[i+3][j] == player && board[i+2][j+1] == player && board[i+1][j+2] == player && board[i][j+3] == player) {
+                    //diagonal down-right
+                    if (board[i][j] == player && board[i+1][j+1] == player && board[i+2][j+2] == player && board[i+3][j+3] == player) {
                         return true;
                     }
-                    if (board[i][j+3] == player && board[i+1][j+2] == player && board[i+2][j+1] == player && board[i+3][j] == player) {
-                    return true;
+                }
+                if (j>=3) {
+                    //diagonal down-left
+                    if (board[i][j] == player && board[i+1][j-1] == player && board[i+2][j-2] == player && board[i+3][j-3] == player) {
+                        return true;
                     }
                 }
             }
